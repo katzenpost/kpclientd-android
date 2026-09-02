@@ -1,31 +1,60 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # SPDX-FileCopyrightText: Copyright 2026-present, Bernd Fix >Y<
 # SPDX-License-Identifier: AGPL-3.0-only
 
-ASDK=/usr/lib/android-sdk/build-tools/34.0.0
-KEYSTORE=/usr/local/src/keystore.jks
-KEY=dev
+set -euo pipefail
 
-#-----------------------------------------------------------------------
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/lib/android-sdk}}
+ANDROID_BUILD_TOOLS=${ANDROID_BUILD_TOOLS:-${ANDROID_SDK_ROOT}/build-tools/36.0.0}
+KEYSTORE=${KEYSTORE:-}
+KEY_ALIAS=${KEY_ALIAS:-dev}
 
-APK_R=app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk
-APK_D=app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
+APK_ROOT=${ROOT}/apk
+APK_R=${APK_ROOT}/app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk
+APK_D=${APK_ROOT}/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
+DEPLOY=${APK_ROOT}/deploy
 
-cd apk/
-rm deploy/*.apk*
-rm ${APK_R} ${APK_D}
-
-./gradlew clean build --no-daemon --no-build-cache
-[ $? -ne 0 ] && exit 1
-
-[ ! -e ${APK_R} ] && exit 1
-
-${ASDK}/zipalign -v 4 ${APK_R} deploy/kpclientd-release-aligned.apk > /dev/null 2>&1
-${ASDK}/apksigner sign --ks ${KEYSTORE} --ks-key-alias ${KEY} --out deploy/kpclientd.apk deploy/kpclientd-release-aligned.apk
-
-if [ "$1" = "+deploy" ]; then
-    adb push deploy/kpclientd.apk /sdcard/Download
-    adb push ${APK_D} /sdcard/Download/kpclientd-debug.apk
+if [[ ! -x "${APK_ROOT}/gradlew" ]]; then
+    printf 'Gradle wrapper is missing: %s\n' "${APK_ROOT}/gradlew" >&2
+    exit 1
 fi
-exit 0
+
+mkdir -p "${DEPLOY}"
+rm -f -- "${DEPLOY}"/*.apk "${DEPLOY}"/*.apk.idsig
+
+(
+    cd "${APK_ROOT}"
+    ./gradlew clean assembleDebug assembleRelease --no-daemon --no-build-cache
+)
+
+if [[ ! -f "${APK_R}" ]]; then
+    printf 'Unsigned release APK not produced: %s\n' "${APK_R}" >&2
+    exit 1
+fi
+
+cp -- "${APK_R}" "${DEPLOY}/kpclientd-release-unsigned.apk"
+
+if [[ -n "${KEYSTORE}" ]]; then
+    if [[ ! -f "${KEYSTORE}" ]]; then
+        printf 'Keystore not found: %s\n' "${KEYSTORE}" >&2
+        exit 1
+    fi
+    "${ANDROID_BUILD_TOOLS}/zipalign" -v 4 "${APK_R}" \
+        "${DEPLOY}/kpclientd-release-aligned.apk" >/dev/null
+    "${ANDROID_BUILD_TOOLS}/apksigner" sign --ks "${KEYSTORE}" \
+        --ks-key-alias "${KEY_ALIAS}" --out "${DEPLOY}/kpclientd.apk" \
+        "${DEPLOY}/kpclientd-release-aligned.apk"
+else
+    printf 'KEYSTORE is unset; preserved the unsigned APK for reproducibility checks.\n'
+fi
+
+if [[ "${1:-}" == "+deploy" ]]; then
+    if [[ ! -f "${DEPLOY}/kpclientd.apk" ]]; then
+        printf 'A signed APK is required for deployment; set KEYSTORE.\n' >&2
+        exit 1
+    fi
+    adb push "${DEPLOY}/kpclientd.apk" /sdcard/Download
+    adb push "${APK_D}" /sdcard/Download/kpclientd-debug.apk
+fi

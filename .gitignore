@@ -8,6 +8,12 @@ build
 /apk/app/debug
 /apk/app/src/main/assets/kpclientd*
 /apk/gradle*
+!/apk/gradlew
+!/apk/gradlew.bat
+!/apk/gradle/
+!/apk/gradle/wrapper/
+!/apk/gradle/wrapper/gradle-wrapper.jar
+!/apk/gradle/wrapper/gradle-wrapper.properties
 /apk/local.properties
 /apk/deploy
 /f-droid/local/test/

@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+# SPDX-License-Identifier: AGPL-3.0-only
+
+set -euo pipefail
+
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+TMP_ROOT=$(mktemp -d)
+
+cleanup() {
+    rm -rf -- "${TMP_ROOT}"
+}
+trap cleanup EXIT
+
+for command in cmp rsync sha256sum; do
+    if ! command -v "${command}" >/dev/null 2>&1; then
+        printf 'Required command not found: %s\n' "${command}" >&2
+        exit 1
+    fi
+done
+
+if [[ ! -x "${ROOT}/apk/app/src/main/assets/kpclientd" ]]; then
+    printf 'Build kpclientd before checking APK reproducibility.\n' >&2
+    exit 1
+fi
+
+for run in 1 2; do
+    checkout=${TMP_ROOT}/source-${run}
+    mkdir -p "${checkout}"
+    rsync -a \
+        --exclude '/.git/' \
+        --exclude '/apk/.gradle/' \
+        --exclude '/apk/app/build/' \
+        --exclude '/apk/build/' \
+        --exclude '/apk/deploy/' \
+        "${ROOT}/" "${checkout}/"
+    "${checkout}/mk_apk"
+done
+
+APK_1=${TMP_ROOT}/source-1/apk/deploy/kpclientd-release-unsigned.apk
+APK_2=${TMP_ROOT}/source-2/apk/deploy/kpclientd-release-unsigned.apk
+
+sha256sum "${APK_1}" "${APK_2}"
+if ! cmp --silent "${APK_1}" "${APK_2}"; then
+    printf 'Reproducibility check failed: unsigned APKs differ.\n' >&2
+    exit 1
+fi
+
+printf 'Reproducibility check passed: both unsigned APKs are identical.\n'

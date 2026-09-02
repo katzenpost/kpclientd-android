@@ -34,10 +34,9 @@ DOCUMENTATION OR COMPILABLE, RUNNABLE OR EVEN OPERATIONAL SOURCE CODE.
 this usually requires `magisk` to be [installed](https://github.com/topjohnwu/Magisk)
 on the device.
 * a cloned Katzenpost repo
-* Go 1.26+
+* the exact Go version listed in `dependencies.txt`
 * Java 17+
 * Android SDK and NDK installed
-* Gradle
 
 ## Building the app
 
@@ -50,46 +49,47 @@ client requests over an interface (Unix socket, TCP).
 
 ### Compiling kpclientd
 
-If your cloned [Katzenpost repo](https://github.com/katzenpost/katzenpost)
-is not located at `/usr/local/src/katzenpost` or you use a different version
-of the Android NDK (not `28.0.13004108`), you need to change the build
-script for the daemon. Copy `mk_daemon` to `mk_daemon_local` and edit the
-lines `KATZENPOST_REPO=...` and `ASDK=...`.
+The build uses the Katzenpost and Go versions pinned in `dependencies.txt`.
+Set `KATZENPOST_REPO` and `ANDROID_NDK_ROOT` when they are not installed in
+the default locations:
 
 To build the program, run:
 
 ```bash
-./mk_daemon_local
+KATZENPOST_REPO=/path/to/katzenpost \
+ANDROID_NDK_ROOT=/path/to/android-ndk \
+./mk_daemon
 ```
 
 The command displays the resulting file properties at the end of the build.
-The file size should be around 31MB.
+With the currently pinned toolchain, the stripped file is around 20MB.
+
+To verify that two clean arm64 builds produce the same daemon binary, run:
+
+```bash
+KATZENPOST_REPO=/path/to/katzenpost \
+ANDROID_NDK_ROOT=/path/to/android-ndk \
+./verify_daemon_reproducible
+```
 
 ### Building the GUI app
 
-#### Setting up gradle
+#### Gradle wrapper
 
-You need `gradle 9.5.0` to build the app. To install the gradle wrapper:
-
-```bash
-cd ./apk/
-mv settings.gradle settings.gradle.x
-mv build.gradle build.gradle.x
-gradle wrapper --gradle-version 9.5.0
-mv settings.gradle.x settings.gradle
-mv build.gradle.x build.gradle
-cd ..
-```
+The repository includes the Gradle wrapper. It downloads Gradle 9.5.0 and
+verifies the distribution with the checksum pinned in
+`apk/gradle/wrapper/gradle-wrapper.properties`; a system Gradle installation
+is not required.
 
 #### Preparing for build
 
-If you need to customize settings in `mk_apk`, copy `mk_apk` to `mk_apk_local`
-and edit it:
+Signing is optional and deliberately separate from the reproducible unsigned
+artifact. Set the following variables only when a signed local APK is needed:
 
 ```toml
-ASDK=/usr/lib/android-sdk/build-tools/34.0.0
-KEYSTORE=/usr/local/src/keystore.jks
-KEY=dev
+ANDROID_BUILD_TOOLS=/path/to/android-sdk/build-tools/36.0.0
+KEYSTORE=/path/to/keystore.jks
+KEY_ALIAS=dev
 ```
 
 If you have no keystore yet (to store keys required to sign APKs), create one
@@ -112,18 +112,27 @@ mkdir ./apk/deploy
 To build the APK, run the following commands:
 
 ```bash
-./mk_apk_local
+./mk_apk
 ```
 
-After a successful build the APK will be signed with the `dev` key
-in the Java keystore.
+Without `KEYSTORE`, the build preserves
+`apk/deploy/kpclientd-release-unsigned.apk` for reproducibility checks.
+With `KEYSTORE`, it additionally produces a locally signed APK.
+
+After building `kpclientd`, verify two clean unsigned APK builds with:
+
+```bash
+ANDROID_SDK_ROOT=/path/to/android-sdk \
+JAVA_HOME=/path/to/jdk-17 \
+./verify_apk_reproducible
+```
 
 You can add the `+deploy` argument if you want the build script to upload
 the resulting binaries (`kpclientd.apk` and `kpclientd-debug.apk`) to the
 `Download` folder on a device:
 
 ```bash
-./mk_apk_local +deploy
+KEYSTORE=/path/to/keystore.jks KEY_ALIAS=dev ./mk_apk +deploy
 ```
 
 ### Running the app

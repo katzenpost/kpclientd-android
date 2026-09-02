@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+# SPDX-License-Identifier: AGPL-3.0-only
+
+set -euo pipefail
+
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+SOURCE_REPO=${KATZENPOST_REPO:-/usr/local/src/katzenpost}
+KATZENPOST_VERSION=$(awk -F= '$1 == "katzenpost" { print $2 }' "${ROOT}/dependencies.txt")
+TMP_ROOT=$(mktemp -d)
+
+cleanup() {
+    rm -rf -- "${TMP_ROOT}"
+}
+trap cleanup EXIT
+
+if [[ ! -d "${SOURCE_REPO}/.git" ]]; then
+    printf 'Katzenpost repository not found: %s\n' "${SOURCE_REPO}" >&2
+    exit 1
+fi
+
+for run in 1 2; do
+    checkout=${TMP_ROOT}/source-${run}
+    output=${TMP_ROOT}/kpclientd-${run}
+    cache=${TMP_ROOT}/go-build-${run}
+
+    git clone --quiet --no-local "${SOURCE_REPO}" "${checkout}"
+    git -C "${checkout}" checkout --quiet "${KATZENPOST_VERSION}"
+    GOCACHE="${cache}" KATZENPOST_REPO="${checkout}" OUTPUT="${output}" \
+        "${ROOT}/mk_daemon" arm64
+done
+
+sha256sum "${TMP_ROOT}/kpclientd-1" "${TMP_ROOT}/kpclientd-2"
+if ! cmp --silent "${TMP_ROOT}/kpclientd-1" "${TMP_ROOT}/kpclientd-2"; then
+    printf 'Reproducibility check failed: kpclientd binaries differ.\n' >&2
+    exit 1
+fi
+
+printf 'Reproducibility check passed: both kpclientd binaries are identical.\n'

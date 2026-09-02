@@ -1,36 +1,85 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # SPDX-FileCopyrightText: Copyright 2026-present, Bernd Fix >Y<
 # SPDX-License-Identifier: AGPL-3.0-only
 
-ASDK=/usr/lib/android-sdk/ndk/28.0.13004108
-KATZENPOST_REPO=/usr/local/src/katzenpost
+set -euo pipefail
 
-#-----------------------------------------------------------------------
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+
+dependency_version() {
+    local name=$1
+    local value
+
+    value=$(awk -F= -v name="${name}" '$1 == name { print $2 }' "${ROOT}/dependencies.txt")
+    if [[ -z "${value}" ]]; then
+        printf 'Missing %s version in dependencies.txt\n' "${name}" >&2
+        exit 1
+    fi
+    printf '%s\n' "${value}"
+}
+
+GO_VERSION=${GO_VERSION:-$(dependency_version go)}
+KATZENPOST_VERSION=${KATZENPOST_VERSION:-$(dependency_version katzenpost)}
+ANDROID_NDK_ROOT=${ANDROID_NDK_ROOT:-${ANDROID_NDK_HOME:-/usr/lib/android-sdk/ndk/28.0.13004108}}
+KATZENPOST_REPO=${KATZENPOST_REPO:-/usr/local/src/katzenpost}
+export GOTOOLCHAIN=${GOTOOLCHAIN:-${GO_VERSION}}
 
 ARCH=${1:-arm64}
-BASE=$(realpath ./apk/app/src/main/assets)
-OUT=${BASE}/kpclientd
+BASE=${ROOT}/apk/app/src/main/assets
+OUT=${OUTPUT:-${BASE}/kpclientd}
+GO_BUILD_ARGS=(-mod=readonly -trimpath -buildvcs=false)
 
-pushd ${KATZENPOST_REPO} >/dev/null 2>&1
-rm -f ${OUT}
-case ${ARCH} in
+if [[ ! -d "${KATZENPOST_REPO}/.git" ]]; then
+    printf 'Katzenpost repository not found: %s\n' "${KATZENPOST_REPO}" >&2
+    exit 1
+fi
+
+actual_go_version=$(go env GOVERSION)
+if [[ "${actual_go_version}" != "${GO_VERSION}" ]]; then
+    printf 'Go version mismatch: expected %s, found %s\n' \
+        "${GO_VERSION}" "${actual_go_version}" >&2
+    exit 1
+fi
+
+expected_commit=$(git -C "${KATZENPOST_REPO}" rev-parse --verify "${KATZENPOST_VERSION}^{commit}")
+actual_commit=$(git -C "${KATZENPOST_REPO}" rev-parse --verify HEAD)
+if [[ "${actual_commit}" != "${expected_commit}" ]]; then
+    printf 'Katzenpost revision mismatch: expected %s (%s), found %s\n' \
+        "${KATZENPOST_VERSION}" "${expected_commit}" "${actual_commit}" >&2
+    exit 1
+fi
+
+case "${ARCH}" in
     arm64)
-        export NDK_CC=${ASDK}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android34-clang
-        export GOTOOLCHAIN=local
-        go mod verify
-        CGO_ENABLED=1 GOOS=android GOARCH=arm64 CC=${NDK_CC} go build \
-            -trimpath -buildvcs=false \
-            -ldflags="-s -w -buildid= -extldflags=-Wl,--build-id=none" \
-            -o ${OUT} ./cmd/kpclientd
-        popd >/dev/null 2>&1
+        NDK_CC=${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android34-clang
         ;;
     amd64)
-        export NDK_CC=${ASDK}/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android28-clang
-        CGO_ENABLED=1 GOOS=android GOARCH=amd64 CC=${NDK_CC} CGO_LDFLAGS="-Wl,--allow-shlib-undefined" \
-            go build -buildmode=pie -o ${OUT} ./cmd/kpclientd
-        popd >/dev/null 2>&1
+        NDK_CC=${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android28-clang
+        GO_BUILD_ARGS+=(-buildmode=pie)
+        export CGO_LDFLAGS=-Wl,--allow-shlib-undefined
+        ;;
+    *)
+        printf 'Unsupported architecture: %s\n' "${ARCH}" >&2
+        exit 1
         ;;
 esac
-[ -e ${OUT} ] && ls -l ${OUT}
 
+if [[ ! -x "${NDK_CC}" ]]; then
+    printf 'Android NDK compiler not found: %s\n' "${NDK_CC}" >&2
+    exit 1
+fi
+
+mkdir -p "$(dirname -- "${OUT}")"
+rm -f -- "${OUT}"
+
+(
+    cd "${KATZENPOST_REPO}"
+    go mod verify
+    CGO_ENABLED=1 GOOS=android GOARCH="${ARCH}" CC="${NDK_CC}" \
+        go build "${GO_BUILD_ARGS[@]}" \
+        -ldflags="-s -w -buildid= -extldflags=-Wl,--build-id=none" \
+        -o "${OUT}" ./cmd/kpclientd
+)
+
+ls -l -- "${OUT}"
