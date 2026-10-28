@@ -7,6 +7,9 @@ build
 /apk/app/release
 /apk/app/debug
 /apk/app/src/main/assets/kpclientd*
+/apk/app/src/main/jniLibs/
+/apk/local.properties
+/build/
 /apk/gradle*
 !/apk/gradlew
 !/apk/gradlew.bat

@@ -65,7 +65,7 @@
         app:layout_constraintTop_toBottomOf="@id/textStatus" />
 
     <LinearLayout
-        android:id="@+id/buttons"
+        android:id="@+id/config_buttons"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_horizontal"
@@ -73,6 +73,33 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/config">
+
+        <Button
+            android:id="@+id/btn_import"
+            style="@style/Widget.AppCompat.Button.Borderless"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/config_import"
+            android:textColor="#ffffff" />
+
+        <Button
+            android:id="@+id/btn_builtin"
+            style="@style/Widget.AppCompat.Button.Borderless"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/config_builtin"
+            android:textColor="#ffffff" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/buttons"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
+        android:orientation="horizontal"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/config_buttons">
 
         <ImageButton
             android:id="@+id/btn_start"
@@ -118,6 +145,25 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/buttons" />
 
+    <TextView
+        android:id="@+id/apps_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="@string/apps_title"
+        android:textColor="#ffffff"
+        android:textStyle="bold"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/elapsed" />
+
+    <LinearLayout
+        android:id="@+id/apps"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/apps_title" />
+
     <ImageButton
         android:id="@+id/btn_log"
         android:layout_width="32dp"
@@ -126,7 +172,7 @@
         android:contentDescription="@string/description_toggle_log"
         android:padding="4dp"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/elapsed"
+        app:layout_constraintTop_toBottomOf="@id/apps"
         app:srcCompat="@drawable/m3_split_button_chevron_avd"
         app:tint="#ffffff" />
 

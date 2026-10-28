@@ -20,14 +20,22 @@
 
 package org.hoi_polloi.kpdaemon;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.FileObserver;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
+import android.widget.Button;
 import android.widget.ImageButton;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
 import org.hoi_polloi.kpdaemon.databinding.ActivityMainBinding;
@@ -55,14 +63,16 @@ public class MainActivity extends AppCompatActivity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private Runnable statusCheck;
-    private Process serverProcess = null;
-    private boolean isRunning;
     private boolean stateLast = false;
     private long sinceLast = -1L;
 
     // watch for changes in logfile (don't make local in method)
     private FileObserver watch;
     private String logPath;
+
+    // pick a configuration file to use instead of the built-in one
+    private final ActivityResultLauncher<String[]> importConfig =
+            registerForActivityResult(new ActivityResultContracts.OpenDocument(), this::importConfig);
 
     // (re-)create activity
     @Override
@@ -73,16 +83,8 @@ public class MainActivity extends AppCompatActivity {
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        // copy assets to local folder
-        copyAssetToStorage(getString(R.string.kpclientd), getString(R.string.kpclientd));
-        String config = getString(R.string.config_src);
-        if (prepareConfig()) {
-            config += getString(R.string.cfg_custom);
-        } else {
-            config += getString(R.string.cfg_local);
-        }
-        binding.config.setText(config);
-        logPath = new File(getFilesDir(), getString(R.string.log_file)).getAbsolutePath();
+        showConfig();
+        logPath = DaemonService.log(this).getAbsolutePath();
 
         // switch off ActionBar
         if (getSupportActionBar() != null) {
@@ -101,6 +103,12 @@ public class MainActivity extends AppCompatActivity {
         // handle button clicks (start / stop)
         binding.btnStart.setOnClickListener(v -> startServer());
         binding.btnStop.setOnClickListener(v -> stopServer());
+        binding.btnImport.setOnClickListener(v -> importConfig.launch(new String[]{"*/*"}));
+        binding.btnBuiltin.setOnClickListener(v -> {
+            new File(getFilesDir(), DaemonService.CUSTOM_CONFIG).delete();
+            showConfig();
+            DaemonService.restart(this);
+        });
 
         // toggle log window visibility
         ImageButton btn = binding.btnLog;
@@ -155,6 +163,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         handler.post(statusCheck);
+        showApps();
     }
 
     // pause operation and stop status checks.
@@ -164,58 +173,100 @@ public class MainActivity extends AppCompatActivity {
         handler.removeCallbacks(statusCheck);
     }
 
-    // destroy activity (stops server)
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        stopServer();
+        watch.stopWatching();
     }
 
-    // start kpclientd to run in background
+    // start kpclientd in its foreground service
     private void startServer() {
-        // fail-safe: don't stop if it looks like we are running already
-        if (serverProcess != null) {
-            return;
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
         }
         binding.btnStart.setEnabled(false);
-        // prepare configuration (use custom config file if available)
-        prepareConfig();
-        // start kpclientd in background
-        executor.execute(() -> {
-            try {
-                String binaryPath = new File(getFilesDir(), getString(R.string.kpclientd)).getAbsolutePath();
-                String configPath = new File(getFilesDir(), getString(R.string.config_file)).getAbsolutePath();
-                Runtime.getRuntime().exec("chmod 755 " + binaryPath).waitFor();
-                String cmd = binaryPath + " -c " + configPath + " >" + logPath + " 2>&1 &";
-                serverProcess = new ProcessBuilder("su", "-c", cmd).start();
-                runOnUiThread(() -> Toast.makeText(MainActivity.this, R.string.server_started, Toast.LENGTH_SHORT).show());
-            } catch (Exception e) {
-                e.printStackTrace();
-                runOnUiThread(() -> Toast.makeText(MainActivity.this, R.string.server_fail_start, Toast.LENGTH_SHORT).show());
-            }
-        });
+        DaemonService.start(this);
+        Toast.makeText(this, R.string.server_started, Toast.LENGTH_SHORT).show();
     }
 
     // stop server
     private void stopServer() {
         binding.btnStop.setEnabled(false);
-        try {
-            // stop running process
-            Process proc = Runtime.getRuntime().exec(new String[]{"su", "-c", "pkill "+getString(R.string.kpclientd)});
-            proc.waitFor();
-            if (proc.exitValue() != 0) {
-                throw new Exception(getString(R.string.server_fail_stop));
-            }
-            // handle process variable
-            if (serverProcess != null) {
-                serverProcess.destroy();
-                serverProcess = null;
-            }
-            Toast.makeText(this, R.string.server_stopped, Toast.LENGTH_SHORT).show();
-        } catch (Exception e) {
-            e.printStackTrace();
-            Toast.makeText(this, getString(R.string.server_fail_stop), Toast.LENGTH_SHORT).show();
+        DaemonService.stop(this);
+        Toast.makeText(this, R.string.server_stopped, Toast.LENGTH_SHORT).show();
+    }
+
+    // show which configuration the daemon uses
+    private void showConfig() {
+        boolean custom = new File(getFilesDir(), DaemonService.CUSTOM_CONFIG).exists();
+        binding.config.setText(getString(R.string.config_src)
+                + getString(custom ? R.string.cfg_custom : R.string.cfg_local));
+        binding.btnBuiltin.setEnabled(custom);
+    }
+
+    // copy the configuration the user picked into the app's own storage
+    private void importConfig(Uri uri) {
+        if (uri == null) {
+            return;
         }
+        File out = new File(getFilesDir(), DaemonService.CUSTOM_CONFIG);
+        try (InputStream in = getContentResolver().openInputStream(uri);
+             OutputStream os = new FileOutputStream(out)) {
+            if (in == null) {
+                throw new IOException("no content");
+            }
+            byte[] buffer = new byte[4096];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                os.write(buffer, 0, read);
+            }
+        } catch (IOException e) {
+            out.delete();
+            Toast.makeText(this, R.string.config_import_failed, Toast.LENGTH_SHORT).show();
+        }
+        showConfig();
+        DaemonService.restart(this);
+    }
+
+    // list the apps the user answered about, each with a way to take the answer back
+    private void showApps() {
+        LinearLayout list = binding.apps;
+        list.removeAllViews();
+        Approvals a = Callers.approvals(this);
+        PackageManager pm = getPackageManager();
+        for (String pkg : a.allowed()) {
+            list.addView(appRow(pm, pkg, getString(R.string.apps_allowed)));
+        }
+        for (String pkg : a.denied()) {
+            list.addView(appRow(pm, pkg, getString(R.string.apps_denied)));
+        }
+        if (list.getChildCount() == 0) {
+            TextView none = new TextView(this);
+            none.setText(R.string.apps_none);
+            none.setTextColor(0xffdddddd);
+            list.addView(none);
+        }
+    }
+
+    private View appRow(PackageManager pm, String pkg, String state) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        TextView name = new TextView(this);
+        name.setText(Callers.label(pm, pkg) + " (" + state + ")");
+        name.setTextColor(0xffffffff);
+        name.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        Button forget = new Button(this, null, 0, androidx.appcompat.R.style.Widget_AppCompat_Button_Borderless);
+        forget.setText(R.string.apps_forget);
+        forget.setTextColor(0xffffffff);
+        forget.setOnClickListener(v -> {
+            Callers.forget(this, pkg);
+            // Ending every connection is the only way to end that app's.
+            DaemonService.restart(this);
+            showApps();
+        });
+        row.addView(name);
+        row.addView(forget);
+        return row;
     }
 
     // start watching for changes in log file.
@@ -300,17 +351,7 @@ public class MainActivity extends AppCompatActivity {
 
     // check the status of the daemon
     private boolean checkDaemonStatus() {
-        // check the real state of the daemon
-        try {
-            // check if the process is running
-            Process proc = Runtime.getRuntime().exec(new String[]{"su", "-c", "pgrep "+getString(R.string.kpclientd)});
-            proc.waitFor();
-            InputStream in = proc.getInputStream();
-            isRunning = (in.available() > 0);
-            in.close();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        boolean isRunning = DaemonService.running();
         // switch buttons if required
         if (isRunning) {
             binding.textStatus.setText(R.string.daemon_on);
@@ -322,60 +363,5 @@ public class MainActivity extends AppCompatActivity {
         binding.btnStart.setEnabled(true);
         binding.btnStop.setEnabled(false);
         return false;
-    }
-
-    // prepare configuration: use custom config file /data/local/tmp/client.toml
-    // if available otherwise use configuration from built-in assets folder.
-    private boolean prepareConfig() {
-        File outFile = new File(getString(R.string.custom_config));
-        boolean done = false;
-        boolean custom = false;
-        if (outFile.exists()) {
-            // if custom config exists, use that instead of the built-in
-            done = copyAssetToStorage(getString(R.string.custom_config), getString(R.string.config_file));
-            custom = true;
-        }
-        if (!done) {
-            copyAssetToStorage(getString(R.string.config_file), getString(R.string.config_file));
-            custom = false;
-        }
-        return custom;
-    }
-
-    // copy file from the assets folder to the local directory
-    private boolean copyAssetToStorage(String src, String tgt) {
-        InputStream in = null;
-        boolean status = false;
-        try {
-            // check for absolute path (custom config)
-            if (src.startsWith("/")) {
-                Process process = Runtime.getRuntime().exec(new String[]{"su", "-c", "cat " + src});
-                in = process.getInputStream();
-                status = true;
-            } else {
-                in = getAssets().open(src);
-                status = false;
-            }
-            // copy content over to local file
-            File fOut = new File(getFilesDir(), tgt);
-            try (OutputStream out = new FileOutputStream(fOut)) {
-                byte[] buffer = new byte[4096];
-                int read;
-                while ((read = in.read(buffer)) != -1) {
-                    out.write(buffer, 0, read);
-                }
-                out.flush();
-            }
-            return fOut.length() > 0;
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            // close inputstream
-            if (in != null) {
-                try { in.close(); } catch (Exception ignored) {}
-            }
-        }
-        return status;
     }
 }

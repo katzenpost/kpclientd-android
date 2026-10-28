@@ -19,7 +19,7 @@ for command in cmp rsync sha256sum; do
     fi
 done
 
-if [[ ! -x "${ROOT}/apk/app/src/main/assets/kpclientd" ]]; then
+if [[ ! -x "${ROOT}/apk/app/src/main/jniLibs/arm64-v8a/libkpclientd.so" ]]; then
     printf 'Build kpclientd before checking APK reproducibility.\n' >&2
     exit 1
 fi

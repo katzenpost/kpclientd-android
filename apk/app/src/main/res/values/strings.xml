@@ -18,9 +18,25 @@
     <string name="server_fail_stop">Can\'t stop kpclientd</string>
     <string name="server_stopped">Server stopped</string>
     <string name="log_read_failed">(log read failed)</string>
-    <string name="custom_config">/sdcard/Download/client.toml</string>
     <string name="description_logo">app logo</string>
     <string name="description_toggle_log">Toggle log view</string>
     <string name="log_output">Log output from server</string>
     <string name="elapsed">0:00</string>
+    <string name="config_import">Import config</string>
+    <string name="config_builtin">Use built-in</string>
+    <string name="config_import_failed">Couldn\'t read that file</string>
+    <string name="channel_daemon">Daemon</string>
+    <string name="channel_approvals">Apps asking for the mixnet</string>
+    <string name="apps_title">Apps</string>
+    <string name="apps_none">No app has asked to use the daemon yet.</string>
+    <string name="apps_allowed">allowed</string>
+    <string name="apps_denied">refused</string>
+    <string name="apps_forget">Forget</string>
+    <string name="approval_title">Allow %1$s to use the mixnet?</string>
+    <string name="approval_notice">Tap to answer.</string>
+    <string name="approval_body">It will send and receive messages through this phone\'s Katzenpost client daemon. You can take this back here at any time.</string>
+    <string name="approval_package">App</string>
+    <string name="approval_cert">Signing certificate (SHA-256)</string>
+    <string name="approval_deny">Don\'t allow</string>
+    <string name="approval_allow">Allow</string>
 </resources>
