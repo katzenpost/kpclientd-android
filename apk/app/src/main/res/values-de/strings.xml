@@ -19,9 +19,25 @@
     <string name="server_fail_stop">Kann Server nicht anhalten</string>
     <string name="server_stopped">Server angehalten</string>
     <string name="log_read_failed">(Log-Lesefehler)</string>
-    <string name="custom_config">/sdcard/Download/client.toml</string>
     <string name="description_logo">App Logo</string>
     <string name="description_toggle_log">Umschalten der Log-Anzeige</string>
     <string name="log_output">Log-Ausgabe des Servers</string>
     <string name="elapsed">0:00</string>
+    <string name="config_import">Konfiguration importieren</string>
+    <string name="config_builtin">Eingebaute nutzen</string>
+    <string name="config_import_failed">Datei konnte nicht gelesen werden</string>
+    <string name="channel_daemon">Server</string>
+    <string name="channel_approvals">Apps, die das Mixnet nutzen wollen</string>
+    <string name="apps_title">Apps</string>
+    <string name="apps_none">Noch keine App wollte den Server nutzen.</string>
+    <string name="apps_allowed">erlaubt</string>
+    <string name="apps_denied">abgelehnt</string>
+    <string name="apps_forget">Vergessen</string>
+    <string name="approval_title">%1$s die Nutzung des Mixnets erlauben?</string>
+    <string name="approval_notice">Zum Antworten tippen.</string>
+    <string name="approval_body">Die App sendet und empfängt dann Nachrichten über den Katzenpost-Client-Server dieses Telefons. Das lässt sich hier jederzeit widerrufen.</string>
+    <string name="approval_package">App</string>
+    <string name="approval_cert">Signaturzertifikat (SHA-256)</string>
+    <string name="approval_deny">Nicht erlauben</string>
+    <string name="approval_allow">Erlauben</string>
 </resources>

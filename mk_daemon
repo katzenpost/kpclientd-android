@@ -26,8 +26,13 @@ KATZENPOST_REPO=${KATZENPOST_REPO:-/usr/local/src/katzenpost}
 export GOTOOLCHAIN=${GOTOOLCHAIN:-${GO_VERSION}}
 
 ARCH=${1:-arm64}
-BASE=${ROOT}/apk/app/src/main/assets
-OUT=${OUTPUT:-${BASE}/kpclientd}
+case "${ARCH}" in
+    arm64) ABI=arm64-v8a ;;
+    amd64) ABI=x86_64 ;;
+    *) ABI=${ARCH} ;;
+esac
+# The app runs the daemon from its native library directory, so it ships as a library.
+OUT=${OUTPUT:-${ROOT}/apk/app/src/main/jniLibs/${ABI}/libkpclientd.so}
 GO_BUILD_ARGS=(-mod=readonly -trimpath -buildvcs=false)
 
 if [[ ! -d "${KATZENPOST_REPO}/.git" ]]; then
@@ -58,6 +63,22 @@ case "${ARCH}" in
         NDK_CC=${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android28-clang
         GO_BUILD_ARGS+=(-buildmode=pie)
         export CGO_LDFLAGS=-Wl,--allow-shlib-undefined
+        # The sqisign binding links a library built against glibc on any linux/amd64, Android
+        # included, where it cannot link. Build against a copy of it whose build tags leave
+        # Android out, so that Android takes the binding's pure Go fallback.
+        SQISIGN=github.com/katzenpost/sqisign/bindings/go
+        if sqisign_dir=$(cd "${KATZENPOST_REPO}" && GOOS=android GOARCH=amd64 go list -m -f '{{.Dir}}' "${SQISIGN}" 2>/dev/null); then
+            patched=$(mktemp -d)
+            trap 'rm -rf -- "${patched}"' EXIT
+            cp -r "${sqisign_dir}/." "${patched}/mod"
+            chmod -R u+w "${patched}/mod"
+            sed -i -e 's#^//go:build linux && amd64$#//go:build linux \&\& amd64 \&\& !android#' \
+                -e 's#^//go:build !linux || !amd64$#//go:build !linux || !amd64 || android#' \
+                "${patched}"/mod/sqisign/*.go
+            cp "${KATZENPOST_REPO}/go.mod" "${KATZENPOST_REPO}/go.sum" "${patched}/"
+            printf 'replace %s => %s\n' "${SQISIGN}" "${patched}/mod" >> "${patched}/go.mod"
+            GO_BUILD_ARGS+=(-modfile="${patched}/go.mod")
+        fi
         ;;
     *)
         printf 'Unsupported architecture: %s\n' "${ARCH}" >&2

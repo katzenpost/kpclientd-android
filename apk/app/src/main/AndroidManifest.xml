@@ -3,12 +3,20 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- The daemon runs as a process of this app and reaches the mixnet itself. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- The approval screen hides other apps' overlays while it asks. -->
+    <uses-permission android:name="android.permission.HIDE_OVERLAY_WINDOWS" />
+
     <application
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
-        
+
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -17,7 +25,29 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        
+
+        <activity
+            android:name=".ApprovalActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.DeviceDefault.Dialog" />
+
+        <service
+            android:name=".DaemonService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Runs the Katzenpost client daemon, through which the apps the user allows reach the mixnet" />
+        </service>
+
+        <!-- Other apps ask here for a connection to the daemon; the user approves each app. -->
+        <provider
+            android:name=".ConnectProvider"
+            android:authorities="org.hoi_polloi.kpdaemon.connect"
+            android:exported="true" />
+
     </application>
 
 </manifest>

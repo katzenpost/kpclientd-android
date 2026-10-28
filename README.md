@@ -44,10 +44,8 @@ DOCUMENTATION OR COMPILABLE, RUNNABLE OR EVEN OPERATIONAL SOURCE CODE.
 
 ## Prerequisites
 
-* arm64-based device with Android 13+ (recommended: Android 16)
-* rooted device (command `su` is available and usable **within** apps);
-this usually requires `magisk` to be [installed](https://github.com/topjohnwu/Magisk)
-on the device.
+* arm64-based device with Android 13+ (recommended: Android 16), or an
+x86_64 emulator for testing; no root is needed
 * a cloned Katzenpost repo
 * the exact Go version listed in `dependencies.txt`
 * Java 17+
@@ -57,10 +55,12 @@ on the device.
 
 The app contains two separate parts:
 
-* the `kpclientd` daemon that connect to the Katzenpost mixnet and serves
-client requests over an interface (Unix socket, TCP).
+* the `kpclientd` daemon that connects to the Katzenpost mixnet and serves
+client apps. It ships in the APK as `libkpclientd.so` and runs as a process of
+the app, listening only on a unix socket in the app's private directory.
 
-* the GUI where the daemon can be started / stopped.
+* the GUI where the daemon can be started and stopped, and where the user
+decides which apps may use it.
 
 ### Compiling kpclientd
 
@@ -76,7 +76,9 @@ ANDROID_NDK_ROOT=/path/to/android-ndk \
 ./mk_daemon
 ```
 
-The command displays the resulting file properties at the end of the build.
+It writes `apk/app/src/main/jniLibs/arm64-v8a/libkpclientd.so`; `./mk_daemon amd64`
+writes the x86_64 one, for the emulator. The command displays the resulting
+file properties at the end of the build.
 With the currently pinned toolchain, the stripped file is around 20MB.
 
 To verify that two clean arm64 builds produce the same daemon binary, run:
@@ -160,8 +162,10 @@ but it may be outdated the time you want to run the daemon.
 
 Because this file is currently not public (it resides in a private repository
 `github.com/katzenpost/namenlos`) you need to contact the Katzenpost project
-and ask for a new version. Copy the new `client.toml` to the `/sdcard/Download`
-folder on your device, where the daemon will pick it up at start time.
+and ask for a new version. Copy the new `client.toml` to your device and pick
+it with **Import config**; **Use built-in** goes back to the built-in one.
+Whichever is used, the app replaces its `[Listen]` section, so that the daemon
+listens only on its private unix socket.
 
 Click on the app icon to open the GUI. Below the title line you see a line like
 `Configuration: ...` where either `built-in` or `custom` is specified.
@@ -178,3 +182,50 @@ There are two buttons to start and stop the daemon and the elapsed time in
 either state is displayed below (format "&lt;hrs&gt;:&lt;mins&gt;").
 
 You can toggle the log view with the chevron button above the window.
+
+### Which apps may use the daemon
+
+No app reaches the daemon unless you allow it. The first time an app asks, a
+notification asks you, and the app can open the same question itself. It shows
+the app's name, package and the fingerprint of the certificate it is signed
+with, with **Don't allow** and **Allow**. Allow only takes a tap a second after
+the question opens, and the question hides other apps' overlays while it is
+shown.
+
+Your answer is kept for that package signed with that certificate. The same
+package signed with another key is a different app, and is asked about again.
+The **Apps** list on the main screen shows every app you answered about.
+**Forget** takes the answer back and restarts the daemon, which ends every
+connection, so an app you forgot is cut off at once.
+
+### For client apps
+
+An app asks for a connection through a content provider:
+
+```java
+Bundle r = getContentResolver().call(
+        Uri.parse("content://org.hoi_polloi.kpdaemon.connect"), "connect", null, null);
+```
+
+The app must declare, in its manifest:
+
+```xml
+<queries>
+    <provider android:authorities="org.hoi_polloi.kpdaemon.connect" />
+</queries>
+```
+
+The Bundle holds either:
+
+* `socket`: a `ParcelFileDescriptor` of a unix socket connected to kpclientd.
+  Speak the thin client protocol over it, as over the daemon's socket; or
+* `error`, which is one of:
+  * `approval`: you haven't answered about this app yet. `approve` is then a
+    `PendingIntent` that opens the question.
+  * `denied`: you refused.
+  * `stopped`: the daemon isn't running.
+  * `unknown`: the caller can't be identified.
+
+kpclientd-android knows the caller by its Binder identity, which the kernel
+provides, never by anything the caller says. A client app needs no internet
+permission, and no other app can reach the daemon without your answer.
