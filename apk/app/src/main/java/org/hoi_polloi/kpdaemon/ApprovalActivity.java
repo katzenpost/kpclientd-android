@@ -79,7 +79,6 @@ public class ApprovalActivity extends Activity {
         String label = Callers.label(pm, pkg);
         b.title.setText(getString(R.string.approval_title, label));
         b.pkg.setText(pkg);
-        b.fingerprint.setText(Callers.fingerprint(digest));
         try {
             b.icon.setImageDrawable(pm.getApplicationIcon(pkg));
         } catch (PackageManager.NameNotFoundException ignored) {

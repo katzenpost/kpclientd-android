@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# test_approval APK: on the device or emulator adb reaches, install APK and check that no app
+# reaches the daemon without the user's answer. The asking app is adb's shell, which Android
+# names com.android.shell.
+
+set -euo pipefail
+
+APK=${1:?usage: test_approval APK}
+PKG=org.hoi_polloi.kpdaemon
+URI=content://org.hoi_polloi.kpdaemon.connect
+
+connect() {
+    adb shell content call --uri "${URI}" --method connect
+}
+
+fail() {
+    printf 'test_approval: %s\n' "$*" >&2
+    exit 1
+}
+
+# The centre of the element whose text or description is $1, from a dump of the screen.
+centre() {
+    adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || true
+    adb exec-out cat /sdcard/ui.xml | python3 -c '
+import html, re, sys
+want = sys.argv[1]
+for m in re.finditer(r"<node [^>]*>", sys.stdin.read()):
+    n = m.group(0)
+    t = html.unescape(re.search(r"text=\"([^\"]*)\"", n).group(1))
+    d = html.unescape(re.search(r"content-desc=\"([^\"]*)\"", n).group(1))
+    if want in (t, d) or t.lower() == want.lower():
+        x1, y1, x2, y2 = map(int, re.search(r"bounds=\"\[(\d+),(\d+)\]\[(\d+),(\d+)\]\"", n).groups())
+        print((x1 + x2) // 2, (y1 + y2) // 2)
+        break
+' "$1"
+}
+
+# Tap the element labelled $1, waiting up to 30 s for it to appear.
+tap() {
+    local at
+    for _ in $(seq 30); do
+        at=$(centre "$1")
+        if [[ -n "${at}" ]]; then
+            # shellcheck disable=SC2086
+            adb shell input tap ${at}
+            return
+        fi
+        sleep 1
+    done
+    fail "no \"$1\" on the screen"
+}
+
+# Wait up to 60 s for connect to answer with $1.
+expect() {
+    local got
+    for _ in $(seq 30); do
+        got=$(connect)
+        if [[ "${got}" == *"$1"* ]]; then
+            return
+        fi
+        sleep 2
+    done
+    fail "connect answered ${got}, not $1"
+}
+
+daemon_pid() {
+    adb shell pidof libkpclientd.so || true
+}
+
+# Open the question about the shell from its notification.
+open_question() {
+    adb shell cmd statusbar expand-notifications
+    tap "Allow Shell to use the mixnet?"
+}
+
+adb install -r "${APK}" >/dev/null
+adb shell pm clear "${PKG}" >/dev/null
+adb shell pm grant "${PKG}" android.permission.POST_NOTIFICATIONS
+adb shell input keyevent KEYCODE_WAKEUP
+adb shell wm dismiss-keyguard || true
+
+echo "an app may not connect before the daemon runs and the user answers"
+expect "error=approval"
+
+echo "the daemon runs without root"
+adb shell am start -n "${PKG}/.MainActivity" >/dev/null
+tap "Start server"
+for _ in $(seq 30); do
+    [[ -n "$(daemon_pid)" ]] && break
+    sleep 1
+done
+[[ -n "$(daemon_pid)" ]] || fail "the daemon did not start"
+
+echo "a tap on Allow as the question opens does nothing"
+# Learn where Allow is, then close the question unanswered.
+open_question
+sleep 2
+allow=$(centre "Allow")
+[[ -n "${allow}" ]] || fail "no Allow on the question"
+adb shell input keyevent KEYCODE_BACK
+# Ask again, and tap Allow the moment the question opens.
+expect "error=approval"
+adb shell cmd statusbar expand-notifications
+sleep 1
+notice=$(centre "Allow Shell to use the mixnet?")
+[[ -n "${notice}" ]] || fail "no notification for the question"
+adb shell "input tap ${notice}; sleep 0.3; input tap ${allow}"
+sleep 2
+expect "error=approval"
+
+echo "once allowed, the app gets a socket"
+tap "Allow"
+expect "socket="
+adb shell run-as "${PKG}" cat files/kpclientd.log | grep -q "Accepted new connection" \
+    || fail "the daemon accepted no connection"
+
+echo "forgetting the app restarts the daemon and asks again"
+before=$(daemon_pid)
+adb shell am start -n "${PKG}/.MainActivity" >/dev/null
+tap "Forget"
+for _ in $(seq 30); do
+    after=$(daemon_pid)
+    [[ -n "${after}" && "${after}" != "${before}" ]] && break
+    sleep 1
+done
+[[ -n "${after}" && "${after}" != "${before}" ]] || fail "the daemon did not restart"
+expect "error=approval"
+
+echo "a refused app is refused"
+open_question
+tap "Don't allow"
+expect "error=denied"
+
+echo "test_approval: ok"

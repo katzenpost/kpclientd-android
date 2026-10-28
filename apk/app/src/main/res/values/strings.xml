@@ -36,7 +36,6 @@
     <string name="approval_notice">Tap to answer.</string>
     <string name="approval_body">It will send and receive messages through this phone\'s Katzenpost client daemon. You can take this back here at any time.</string>
     <string name="approval_package">App</string>
-    <string name="approval_cert">Signing certificate (SHA-256)</string>
     <string name="approval_deny">Don\'t allow</string>
     <string name="approval_allow">Allow</string>
 </resources>
