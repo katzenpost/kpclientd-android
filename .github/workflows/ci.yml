@@ -31,15 +31,15 @@ jobs:
         run: |
           echo "GO=$(sed -n 's/^go=go//p' dependencies.txt)" >> "$GITHUB_ENV"
           echo "KATZENPOST=$(sed -n 's/^katzenpost=//p' dependencies.txt)" >> "$GITHUB_ENV"
-      - uses: actions/setup-go@v6
-        with:
-          go-version: ${{ env.GO }}
-          cache: false
       - uses: actions/checkout@v5
         with:
           repository: katzenpost/katzenpost
           ref: ${{ env.KATZENPOST }}
           path: katzenpost
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO }}
+          cache-dependency-path: katzenpost/go.sum
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
