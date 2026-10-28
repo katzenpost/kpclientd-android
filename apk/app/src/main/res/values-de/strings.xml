@@ -37,7 +37,6 @@
     <string name="approval_notice">Zum Antworten tippen.</string>
     <string name="approval_body">Die App sendet und empfängt dann Nachrichten über den Katzenpost-Client-Server dieses Telefons. Das lässt sich hier jederzeit widerrufen.</string>
     <string name="approval_package">App</string>
-    <string name="approval_cert">Signaturzertifikat (SHA-256)</string>
     <string name="approval_deny">Nicht erlauben</string>
     <string name="approval_allow">Erlauben</string>
 </resources>

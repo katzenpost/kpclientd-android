@@ -187,10 +187,13 @@ You can toggle the log view with the chevron button above the window.
 
 No app reaches the daemon unless you allow it. The first time an app asks, a
 notification asks you, and the app can open the same question itself. It shows
-the app's name, package and the fingerprint of the certificate it is signed
-with, with **Don't allow** and **Allow**. Allow only takes a tap a second after
-the question opens, and the question hides other apps' overlays while it is
-shown.
+the app's icon, name and package, with **Don't allow** and **Allow**. Allow
+only takes a tap a second after the question opens, and the question hides
+other apps' overlays while it is shown.
+
+`./test_approval APK` checks all of this on a device or emulator over adb; CI
+runs it on an emulator. A tag `v*` publishes a signed APK, after building the
+daemon and the APK twice each and checking that both builds are the same.
 
 Your answer is kept for that package signed with that certificate. The same
 package signed with another key is a different app, and is asked about again.

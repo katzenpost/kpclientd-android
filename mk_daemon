@@ -67,7 +67,13 @@ case "${ARCH}" in
         # included, where it cannot link. Build against a copy of it whose build tags leave
         # Android out, so that Android takes the binding's pure Go fallback.
         SQISIGN=github.com/katzenpost/sqisign/bindings/go
-        if sqisign_dir=$(cd "${KATZENPOST_REPO}" && GOOS=android GOARCH=amd64 go list -m -f '{{.Dir}}' "${SQISIGN}" 2>/dev/null); then
+        if (cd "${KATZENPOST_REPO}" && go list -m "${SQISIGN}" >/dev/null 2>&1); then
+            sqisign_dir=$(cd "${KATZENPOST_REPO}" && go mod download -json "${SQISIGN}" \
+                | sed -n 's/^[[:space:]]*"Dir": "\(.*\)",*$/\1/p')
+            if [[ -z "${sqisign_dir}" || ! -d "${sqisign_dir}/sqisign" ]]; then
+                printf 'Cannot find the source of %s\n' "${SQISIGN}" >&2
+                exit 1
+            fi
             patched=$(mktemp -d)
             trap 'rm -rf -- "${patched}"' EXIT
             cp -r "${sqisign_dir}/." "${patched}/mod"

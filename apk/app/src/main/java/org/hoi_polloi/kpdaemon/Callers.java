@@ -81,16 +81,4 @@ final class Callers {
             throw new IllegalStateException(e);
         }
     }
-
-    // A fingerprint for people to compare: the digest in groups of four.
-    static String fingerprint(String digest) {
-        StringBuilder s = new StringBuilder();
-        for (int i = 0; i < digest.length(); i += 4) {
-            if (i > 0) {
-                s.append(i % 32 == 0 ? '\n' : ' ');
-            }
-            s.append(digest, i, Math.min(i + 4, digest.length()));
-        }
-        return s.toString();
-    }
 }
