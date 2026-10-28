@@ -3,6 +3,21 @@
 Run [Katzenpost](https://github.com/katzenpost/katzenpost) client daemon
 `kpclientd` on Android devices.
 
+## About this copy
+
+This repository is a copy of
+[bfix/kpclientd-android](https://github.com/bfix/kpclientd-android), made
+without first asking its author for permission. kpclientd-android was started
+by Bernd Fix, who is not part of the Katzenpost team. We appreciate his work
+and intend to build on it here. The copy also includes the reproducible-build
+changes from gabrix73 in
+[bfix/kpclientd-android#1](https://github.com/bfix/kpclientd-android/pull/1).
+
+We would gladly hand this responsibility over to someone else. For the time
+being, what is published here is code that works on our own Android phones. We
+hope this work will one day be useful to people who want to use Katzenpost,
+not only to developers working on it.
+
 ## License
 
 Copyright (C) 2026-present, Bernd Fix   >Y<
