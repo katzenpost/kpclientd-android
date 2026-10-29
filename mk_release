@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# mk_release: the release APKs, one per ABI, into dist/, named for $VERSION. Each is kept
+# unsigned, for anyone to compare with their own build, and, with KEYSTORE (a .jks holding one
+# key) and KEYSTORE_PASSWORD set, signed beside it. SHA256SUMS lists them all.
+
+set -euo pipefail
+
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/lib/android-sdk}}
+TOOLS=${ANDROID_SDK_ROOT}/build-tools/36.0.0
+VERSION=${VERSION:-$(git -C "${ROOT}" describe --tags --always)}
+KEYSTORE=${KEYSTORE:-}
+DIST=${ROOT}/dist
+OUTPUTS=${ROOT}/apk/app/build/outputs/apk/release
+
+# A tag names the version the app says it is.
+if [[ "${VERSION}" == v[0-9]* ]]; then
+    name=$(sed -n 's/^ *versionName "\(.*\)"$/\1/p' "${ROOT}/apk/app/build.gradle")
+    if [[ "${VERSION}" != "v${name}" ]]; then
+        printf 'The tag %s is not the app'"'"'s version, %s\n' "${VERSION}" "${name}" >&2
+        exit 1
+    fi
+fi
+
+KEYSTORE= "${ROOT}/mk_apk"
+
+rm -rf -- "${DIST}"
+mkdir -p "${DIST}"
+for abi in arm64-v8a x86_64; do
+    unsigned=${DIST}/kpclientd-android-${VERSION}-${abi}-unsigned.apk
+    cp -- "${OUTPUTS}/app-${abi}-release-unsigned.apk" "${unsigned}"
+    if [[ -n "${KEYSTORE}" ]]; then
+        aligned=${DIST}/aligned.apk
+        "${TOOLS}/zipalign" -f -p 4 "${unsigned}" "${aligned}"
+        "${TOOLS}/apksigner" sign --ks "${KEYSTORE}" --ks-pass env:KEYSTORE_PASSWORD \
+            --out "${DIST}/kpclientd-android-${VERSION}-${abi}.apk" "${aligned}"
+        rm -f -- "${aligned}" "${DIST}"/*.idsig
+        "${TOOLS}/apksigner" verify --print-certs "${DIST}/kpclientd-android-${VERSION}-${abi}.apk"
+    fi
+done
+(cd "${DIST}" && sha256sum -- *.apk > SHA256SUMS)
+cat "${DIST}/SHA256SUMS"

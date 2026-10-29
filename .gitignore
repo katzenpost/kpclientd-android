@@ -22,3 +22,4 @@ build
 /f-droid/local/test/
 /f-droid/local/.env
 /*_local
+/dist/
