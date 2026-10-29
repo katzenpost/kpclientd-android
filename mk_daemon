@@ -74,15 +74,18 @@ case "${ARCH}" in
                 printf 'Cannot find the source of %s\n' "${SQISIGN}" >&2
                 exit 1
             fi
-            patched=$(mktemp -d)
-            trap 'rm -rf -- "${patched}"' EXIT
-            cp -r "${sqisign_dir}/." "${patched}/mod"
-            chmod -R u+w "${patched}/mod"
+            # Inside the checkout and named relative to it, since the build records the path.
+            patched=android-sqisign
+            rm -rf -- "${KATZENPOST_REPO:?}/${patched}"
+            trap 'rm -rf -- "${KATZENPOST_REPO:?}/${patched}"' EXIT
+            mkdir -p "${KATZENPOST_REPO}/${patched}"
+            cp -r "${sqisign_dir}/." "${KATZENPOST_REPO}/${patched}/mod"
+            chmod -R u+w "${KATZENPOST_REPO}/${patched}/mod"
             sed -i -e 's#^//go:build linux && amd64$#//go:build linux \&\& amd64 \&\& !android#' \
                 -e 's#^//go:build !linux || !amd64$#//go:build !linux || !amd64 || android#' \
-                "${patched}"/mod/sqisign/*.go
-            cp "${KATZENPOST_REPO}/go.mod" "${KATZENPOST_REPO}/go.sum" "${patched}/"
-            printf 'replace %s => %s\n' "${SQISIGN}" "${patched}/mod" >> "${patched}/go.mod"
+                "${KATZENPOST_REPO}/${patched}"/mod/sqisign/*.go
+            cp "${KATZENPOST_REPO}/go.mod" "${KATZENPOST_REPO}/go.sum" "${KATZENPOST_REPO}/${patched}/"
+            printf 'replace %s => ./%s/mod\n' "${SQISIGN}" "${patched}" >> "${KATZENPOST_REPO}/${patched}/go.mod"
             GO_BUILD_ARGS+=(-modfile="${patched}/go.mod")
         fi
         ;;
