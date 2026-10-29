@@ -9,9 +9,6 @@ on:
   pull_request:
   workflow_call:
 
-env:
-  NDK: "28.0.13004108"
-
 jobs:
   unit:
     runs-on: ubuntu-24.04
@@ -21,36 +18,23 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      - run: cd apk && ./gradlew --no-daemon testDebugUnitTest
+      - run: make test
 
   build:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
-      - name: Versions
-        run: |
-          echo "GO=$(sed -n 's/^go=go//p' dependencies.txt)" >> "$GITHUB_ENV"
-          echo "KATZENPOST=$(sed -n 's/^katzenpost=//p' dependencies.txt)" >> "$GITHUB_ENV"
-      - uses: actions/checkout@v5
-        with:
-          repository: katzenpost/katzenpost
-          ref: ${{ env.KATZENPOST }}
-          path: katzenpost
-      - uses: actions/setup-go@v6
-        with:
-          go-version: ${{ env.GO }}
-          cache-dependency-path: katzenpost/go.sum
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
-      - run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;$NDK" "platforms;android-36" "build-tools;36.0.0"
-      - name: Daemon
-        run: |
-          export KATZENPOST_REPO=$PWD/katzenpost ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/$NDK
-          ./mk_daemon arm64
-          ./mk_daemon amd64
-      - run: cd apk && ./gradlew --no-daemon assembleDebug assembleRelease
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-${{ hashFiles('dependencies.txt') }}
+      - run: make sdk apk
       - uses: actions/upload-artifact@v5
         with:
           name: apks
@@ -77,4 +61,4 @@ jobs:
           target: google_apis
           arch: x86_64
           disable-animations: true
-          script: ./test_approval apks/debug/app-x86_64-debug.apk
+          script: make test-approval APK=apks/debug/app-x86_64-debug.apk

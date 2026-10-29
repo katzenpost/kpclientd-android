@@ -72,8 +72,20 @@ daemon_pid() {
 
 # Open the question about the shell from its notification.
 open_question() {
-    adb shell cmd statusbar expand-notifications
-    tap "Allow Shell to use the mixnet?"
+    local at
+    for _ in $(seq 10); do
+        connect >/dev/null
+        adb shell cmd statusbar expand-notifications
+        sleep 2
+        at=$(centre "Allow Shell to use the mixnet?")
+        if [[ -n "${at}" ]]; then
+            # shellcheck disable=SC2086
+            adb shell input tap ${at}
+            return
+        fi
+        adb shell cmd statusbar collapse
+    done
+    fail "no question about the shell in the notifications"
 }
 
 adb install -r "${APK}" >/dev/null
@@ -112,6 +124,7 @@ sleep 2
 expect "error=approval"
 
 echo "once allowed, the app gets a socket"
+[[ -n "$(centre "Allow")" ]] || open_question
 tap "Allow"
 expect "socket="
 adb shell run-as "${PKG}" cat files/kpclientd.log | grep -q "Accepted new connection" \

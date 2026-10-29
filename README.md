@@ -39,122 +39,68 @@ SPDX-License-Identifier: AGPL3.0-or-later
 
 ## Caveat
 
-THIS IS WORK-IN-PROGRESS AT A VERY EARLY STATE. DON'T EXPECT ANY COMPLETE
-DOCUMENTATION OR COMPILABLE, RUNNABLE OR EVEN OPERATIONAL SOURCE CODE.
+This is early work. It runs on our own phones and on the emulator in CI, but
+expect rough edges.
 
-## Prerequisites
+## Installing
 
-* arm64-based device with Android 13+ (recommended: Android 16), or an
-x86_64 emulator for testing; no root is needed
-* a cloned Katzenpost repo
-* the exact Go version listed in `dependencies.txt`
-* Java 17+
-* Android SDK and NDK installed
+Each [release](https://github.com/katzenpost/kpclientd-android/releases) has
+an APK for each ABI: `arm64-v8a` for phones, `x86_64` for emulators. Install
+the signed one, `kpclientd-android-<version>-<abi>.apk`. Releases are all
+signed with the same key, so each installs over the last.
 
-## Building the app
+Android 13 or later is needed; no root is.
 
-The app contains two separate parts:
+## Building
 
-* the `kpclientd` daemon that connects to the Katzenpost mixnet and serves
+The app has two parts:
+
+* the `kpclientd` daemon, which connects to the Katzenpost mixnet and serves
 client apps. It ships in the APK as `libkpclientd.so` and runs as a process of
 the app, listening only on a unix socket in the app's private directory.
 
-* the GUI where the daemon can be started and stopped, and where the user
-decides which apps may use it.
+* the GUI, where the daemon is started and stopped, and where the user decides
+which apps may use it.
 
-### Compiling kpclientd
+Every step is a make target, and CI calls the same targets. You need JDK 21,
+the Android SDK's command-line tools (`ANDROID_HOME`, by default
+`~/Android/Sdk`), git, and any Go of 1.21 or later, which fetches the exact Go
+pinned in `dependencies.txt`.
 
-The build uses the Katzenpost and Go versions pinned in `dependencies.txt`.
-Set `KATZENPOST_REPO` and `ANDROID_NDK_ROOT` when they are not installed in
-the default locations:
+| Target | |
+|---|---|
+| `make sdk` | the pinned NDK, platform and build tools |
+| `make daemon` | clones Katzenpost at the version in `dependencies.txt` into `build/katzenpost` (or uses `KATZENPOST_REPO`) and builds `kpclientd` for both ABIs |
+| `make apk` | the daemon, then the debug and unsigned release APKs, in `apk/app/build/outputs/apk` |
+| `make test` | the unit tests |
+| `make test-approval APK=…` | on the device or emulator adb reaches, checks that no app reaches the daemon without the user's answer |
+| `make release` | the release APKs into `dist/`, unsigned, and signed beside them when `KEYSTORE` (a `.jks`) and `KEYSTORE_PASSWORD` are set; with `SHA256SUMS` |
+| `make repro` | builds the arm64 daemon and the unsigned APK twice each from clean copies, and checks both are the same |
 
-To build the program, run:
+The Gradle wrapper fetches Gradle 9.5.0 and checks it against the checksum in
+`apk/gradle/wrapper/gradle-wrapper.properties`.
 
-```bash
-KATZENPOST_REPO=/path/to/katzenpost \
-ANDROID_NDK_ROOT=/path/to/android-ndk \
-./mk_daemon
-```
+### Releases
 
-It writes `apk/app/src/main/jniLibs/arm64-v8a/libkpclientd.so`; `./mk_daemon amd64`
-writes the x86_64 one, for the emulator. The command displays the resulting
-file properties at the end of the build.
-With the currently pinned toolchain, the stripped file is around 20MB.
+A tag `v*` runs CI, then builds the daemon and the APKs on two runners, in
+different directories, and publishes them as a GitHub release only if both
+builds are byte for byte the same. The tag must name the app's `versionName`.
+The build is reproducible: Go, Katzenpost, the NDK, the build tools, Gradle
+and the Android Gradle plugin are pinned, and paths, build ids and dates are
+kept out of the output.
 
-To verify that two clean arm64 builds produce the same daemon binary, run:
-
-```bash
-KATZENPOST_REPO=/path/to/katzenpost \
-ANDROID_NDK_ROOT=/path/to/android-ndk \
-./verify_daemon_reproducible
-```
-
-### Building the GUI app
-
-#### Gradle wrapper
-
-The repository includes the Gradle wrapper. It downloads Gradle 9.5.0 and
-verifies the distribution with the checksum pinned in
-`apk/gradle/wrapper/gradle-wrapper.properties`; a system Gradle installation
-is not required.
-
-#### Preparing for build
-
-Signing is optional and deliberately separate from the reproducible unsigned
-artifact. Set the following variables only when a signed local APK is needed:
-
-```toml
-ANDROID_BUILD_TOOLS=/path/to/android-sdk/build-tools/36.0.0
-KEYSTORE=/path/to/keystore.jks
-KEY_ALIAS=dev
-```
-
-If you have no keystore yet (to store keys required to sign APKs), create one
-in a folder of your choice and set the location in the file above:
+To check a release, build it yourself and compare the unsigned APK with the
+release's:
 
 ```bash
-keytool -genkey -v \
-  -keystore <folder>/keystore.jks -alias dev \
-  -keyalg RSA -keysize 2048 -validity 10000
+git checkout v1.1.0
+make sdk && VERSION=v1.1.0 make release
+sha256sum dist/*-unsigned.apk
 ```
 
-You also need to create an output folder:
+The signed APK differs from the unsigned one only by its signature.
 
-```bash
-mkdir ./apk/deploy
-```
-
-#### Building and installing the APK
-
-To build the APK, run the following commands:
-
-```bash
-./mk_apk
-```
-
-Without `KEYSTORE`, the build preserves
-`apk/deploy/kpclientd-release-unsigned.apk` for reproducibility checks.
-With `KEYSTORE`, it additionally produces a locally signed APK.
-
-After building `kpclientd`, verify two clean unsigned APK builds with:
-
-```bash
-ANDROID_SDK_ROOT=/path/to/android-sdk \
-JAVA_HOME=/path/to/jdk-17 \
-./verify_apk_reproducible
-```
-
-You can add the `+deploy` argument if you want the build script to upload
-the resulting binaries (`kpclientd.apk` and `kpclientd-debug.apk`) to the
-`Download` folder on a device:
-
-```bash
-KEYSTORE=/path/to/keystore.jks KEY_ALIAS=dev ./mk_apk +deploy
-```
-
-### Running the app
-
-Install the `kpclientd.apk` on your device, but don't open it yet.
+## Running the app
 
 The daemon requires a configuration file (usually called `client.toml`) to
 successfully connect to the Katzenpost mixnet. A config file is built-in,
@@ -170,7 +116,7 @@ listens only on its private unix socket.
 Click on the app icon to open the GUI. Below the title line you see a line like
 `Configuration: ...` where either `built-in` or `custom` is specified.
 
-### Using the app
+## Using the app
 
 If the app is started it will display the first of the following screens:
 
@@ -183,7 +129,7 @@ either state is displayed below (format "&lt;hrs&gt;:&lt;mins&gt;").
 
 You can toggle the log view with the chevron button above the window.
 
-### Which apps may use the daemon
+## Which apps may use the daemon
 
 No app reaches the daemon unless you allow it. The first time an app asks, a
 notification asks you, and the app can open the same question itself. It shows
@@ -191,9 +137,8 @@ the app's icon, name and package, with **Don't allow** and **Allow**. Allow
 only takes a tap a second after the question opens, and the question hides
 other apps' overlays while it is shown.
 
-`./test_approval APK` checks all of this on a device or emulator over adb; CI
-runs it on an emulator. A tag `v*` publishes a signed APK, after building the
-daemon and the APK twice each and checking that both builds are the same.
+`make test-approval APK=…` checks all of this on a device or emulator over
+adb; CI runs it on an emulator.
 
 Your answer is kept for that package signed with that certificate. The same
 package signed with another key is a different app, and is asked about again.
@@ -201,7 +146,7 @@ The **Apps** list on the main screen shows every app you answered about.
 **Forget** takes the answer back and restarts the daemon, which ends every
 connection, so an app you forgot is cut off at once.
 
-### For client apps
+## For client apps
 
 An app asks for a connection through a content provider:
 
