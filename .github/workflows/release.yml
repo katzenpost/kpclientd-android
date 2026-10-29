@@ -71,6 +71,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v5
+        with:
+          pattern: build-*
       - name: Both builds are the same
         run: |
           sha256sum */*
