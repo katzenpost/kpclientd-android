@@ -81,8 +81,13 @@ The Gradle wrapper fetches Gradle 9.5.0 and checks it against the checksum in
 `apk/gradle/wrapper/gradle-wrapper.properties`; `make` checks the wrapper jar
 itself, and Gradle checks every dependency and plugin it fetches against
 `apk/gradle/verification-metadata.xml`. After changing a dependency, refresh
-that file with `./gradlew --write-verification-metadata sha256 assembleRelease`
-in `apk` and review the diff.
+that file from an empty cache, since a warm one leaves out what it already
+holds, and review the diff:
+
+```bash
+cd apk && GRADLE_USER_HOME=$(mktemp -d) ./gradlew --write-verification-metadata sha256 \
+    assembleDebug assembleRelease testDebugUnitTest assembleDebugAndroidTest
+```
 
 ### Releases
 
