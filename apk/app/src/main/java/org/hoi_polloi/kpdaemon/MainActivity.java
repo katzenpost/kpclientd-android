@@ -28,6 +28,7 @@ import android.os.FileObserver;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
@@ -78,6 +79,8 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle BundleSavedInstanceState) {
         super.onCreate(BundleSavedInstanceState);
+        // The log view shows the daemon's traffic metadata: keep it out of screenshots and casts.
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
 
         // get layout binding
         binding = ActivityMainBinding.inflate(getLayoutInflater());
