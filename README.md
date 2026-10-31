@@ -78,7 +78,11 @@ pinned in `dependencies.txt`.
 | `make repro` | builds the arm64 daemon and the unsigned APK twice each from clean copies, and checks both are the same |
 
 The Gradle wrapper fetches Gradle 9.5.0 and checks it against the checksum in
-`apk/gradle/wrapper/gradle-wrapper.properties`.
+`apk/gradle/wrapper/gradle-wrapper.properties`; `make` checks the wrapper jar
+itself, and Gradle checks every dependency and plugin it fetches against
+`apk/gradle/verification-metadata.xml`. After changing a dependency, refresh
+that file with `./gradlew --write-verification-metadata sha256 assembleRelease`
+in `apk` and review the diff.
 
 ### Releases
 
