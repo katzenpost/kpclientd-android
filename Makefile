@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 ANDROID_HOME ?= $(HOME)/Android/Sdk
-NDK ?= 28.0.13004108
+NDK ?= 30.0.16248370
 KATZENPOST := $(shell sed -n 's/^katzenpost=//p' dependencies.txt)
 KATZENPOST_REPO ?= $(CURDIR)/build/katzenpost
 VERSION ?= $(shell git describe --tags --always)
