@@ -102,8 +102,8 @@ To check a release, build it yourself and compare the unsigned APK with the
 release's:
 
 ```bash
-git checkout v1.1.0
-make sdk && VERSION=v1.1.0 make release
+git checkout v1.2.0
+make sdk && VERSION=v1.2.0 make release
 sha256sum dist/*-unsigned.apk
 ```
 
