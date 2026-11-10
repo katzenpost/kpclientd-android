@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 ANDROID_HOME ?= $(HOME)/Android/Sdk
-NDK ?= 28.0.13004108
+NDK ?= 30.0.16248370
 KATZENPOST := $(shell sed -n 's/^katzenpost=//p' dependencies.txt)
 KATZENPOST_REPO ?= $(CURDIR)/build/katzenpost
 VERSION ?= $(shell git describe --tags --always)
@@ -20,9 +20,10 @@ sdk:
 	yes | $(ANDROID_HOME)/cmdline-tools/latest/bin/sdkmanager \
 		"ndk;$(NDK)" "platforms;android-36" "build-tools;36.0.0" >/dev/null
 
-# Katzenpost at the version in dependencies.txt.
+# Katzenpost at the version in dependencies.txt, a tag or a commit.
 $(KATZENPOST_REPO):
-	git clone --quiet --branch $(KATZENPOST) https://github.com/katzenpost/katzenpost $@
+	git clone --quiet https://github.com/katzenpost/katzenpost $@
+	git -C $@ checkout --quiet $(KATZENPOST)
 
 # kpclientd for both ABIs, into the app's native libraries.
 daemon: $(KATZENPOST_REPO)

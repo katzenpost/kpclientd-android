@@ -21,7 +21,7 @@ dependency_version() {
 
 GO_VERSION=${GO_VERSION:-$(dependency_version go)}
 KATZENPOST_VERSION=${KATZENPOST_VERSION:-$(dependency_version katzenpost)}
-ANDROID_NDK_ROOT=${ANDROID_NDK_ROOT:-${ANDROID_NDK_HOME:-/usr/lib/android-sdk/ndk/28.0.13004108}}
+ANDROID_NDK_ROOT=${ANDROID_NDK_ROOT:-${ANDROID_NDK_HOME:-/usr/lib/android-sdk/ndk/30.0.16248370}}
 KATZENPOST_REPO=${KATZENPOST_REPO:-/usr/local/src/katzenpost}
 export GOTOOLCHAIN=${GOTOOLCHAIN:-${GO_VERSION}}
 

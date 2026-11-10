@@ -1,2 +1,2 @@
 go=go1.27.3
-katzenpost=v0.0.98
+katzenpost=f5a42e1bf2ba2b0740ea39d074d39a63996e9dd5
